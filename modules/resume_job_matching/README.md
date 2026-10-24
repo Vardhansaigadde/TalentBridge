@@ -1,108 +1,118 @@
 # Module 1: Resume–Job Matching Engine
 
-**Assigned Lead:** Member 1  
-**Status:** ✅ Active Baseline Implemented  
+**Assigned Lead:** Member 1 (Lead Architect)  
+**Status:** ✅ Production Hybrid Engine Implemented  
 **Package:** `modules.resume_job_matching`
 
 ---
 
 ## 1. Overview & Objective
 
-The **Resume–Job Matching** module is designed to provide immediate, transparent feedback to candidates and recruiters by assessing textual alignment between a candidate's resume and a target job description. It extracts high-signal domain vocabulary, computes vector-space distance, and highlights actionable skill gaps.
+The **Resume–Job Matching Engine** provides multi-dimensional candidate-to-job compatibility analysis. It accepts multi-format resume documents (**PDF, DOCX, TXT**), evaluates domain skills taxonomy coverage across 6 technical disciplines, computes vocabulary overlap using TF-IDF and Cosine distance, and delivers an Applicant Tracking System (ATS) structural audit with a prioritized optimization plan.
 
 ---
 
-## 2. Machine Learning Architecture
+## 2. Machine Learning & NLP Architecture
 
-### Algorithm Formulation
-This baseline implementation utilizes a dual **Term Frequency-Inverse Document Frequency (TF-IDF)** vectorization model combined with **Cosine Distance** measurement:
+### A. Document Parsing Pipeline (`preprocessing.py`)
+- **PDF Extraction:** Uses `PyMuPDF` (`fitz`) to extract text streams across all document pages.
+- **DOCX Extraction:** Parses paragraph runs and table cell matrices using `python-docx`.
+- **Text Normalization:** Lowercasing, URL/email stripping, punctuation normalization while preserving domain tokens (`c++`, `c#`, `ci/cd`, `rest api`).
 
-1. **Text Preprocessing (`preprocessing.py`):**
-   - Normalization: Case folding, URL removal, email stripping, punctuation filtering.
-   - Stopword Elimination: Merges English stop words with recruiting noise phrases (e.g., *requirements, responsibilities, years*).
-   - Domain N-Grams: Unigrams and bigrams are extracted to capture compound technologies (e.g., `rest api`, `ci cd`).
+### B. Curated Skills Taxonomy
+Scans resumes and job descriptions against categorized technical competencies:
+1. **Programming Languages:** Python, Java, C++, C#, JavaScript, TypeScript, Go, Rust, SQL, Bash, etc.
+2. **Frameworks & Web:** FastAPI, Django, Flask, React, Next.js, Node.js, Spring Boot, GraphQL, REST API, etc.
+3. **Cloud & DevOps:** AWS, Azure, GCP, Docker, Kubernetes, Terraform, CI/CD, GitHub Actions, Helm, Linux, etc.
+4. **Databases & Storage:** PostgreSQL, MySQL, MongoDB, Redis, Cassandra, Elasticsearch, DynamoDB, etc.
+5. **Data & AI/ML:** PyTorch, TensorFlow, Scikit-learn, Pandas, NumPy, NLP, LLMs, Computer Vision, etc.
+6. **Architecture & Methods:** Microservices, System Design, Distributed Systems, Agile, Scrum, JIRA, etc.
 
-2. **Vector Space Model (`model.py`):**
-   - Sublinear term frequency scaling: $tf = 1 + \log(tf)$ for positive frequencies.
-   - Vector projection: Text inputs $D_{resume}$ and $D_{job}$ are projected into an $N$-dimensional sparse vector space.
+### C. Hybrid Composite Scoring Formulation (`model.py`)
+Rather than relying purely on bag-of-words or uncalibrated word frequencies, the engine uses a weighted composite metric:
 
-3. **Cosine Similarity:**
-   $$\text{Similarity}(u, v) = \frac{u \cdot v}{\|u\|_2 \|v\|_2}$$
-   - Produces a normalized scalar score in the interval $[0.0, 1.0]$.
-   - Mapped to a percentage: $\text{Score} = \text{Similarity} \times 100\%$.
+$$\text{Composite Score} = 0.55 \times S_{\text{skills}} + 0.45 \times S_{\text{tfidf}}$$
 
-4. **Skill Gap & Keyword Overlap Analysis:**
-   - Evaluates token intersection between salient Job Description terms and the Resume text.
-   - Outputs:
-     - `matched_keywords`: Terms present in both texts.
-     - `missing_keywords`: High-value job requirements absent from the resume.
+Where:
+- **$S_{\text{skills}}$ (Skills Coverage Ratio):**
+  $$S_{\text{skills}} = \frac{|\text{Skills}_{\text{Job}} \cap \text{Skills}_{\text{Resume}}|}{|\text{Skills}_{\text{Job}}|}$$
+- **$S_{\text{tfidf}}$ (Cosine Distance):**
+  $$S_{\text{tfidf}} = \frac{u_{\text{resume}} \cdot v_{\text{job}}}{\|u_{\text{resume}}\|_2 \|v_{\text{job}}\|_2}$$
+
+### D. Classification Tiers
+- **High Match:** $\ge 75\%$
+- **Moderate Match:** $45\% - 74\%$
+- **Low Match:** $< 45\%$
+
+### E. ATS Structural & Impact Audit
+- **Length Analysis:** Assesses optimal word counts (250–850 words).
+- **Section Verification:** Verifies standard headers (*Contact Info, Experience, Education, Skills, Projects*).
+- **Action Verb Density:** Identifies power verbs (*Architected, Engineered, Optimized, Automated*).
+- **Quantification Metric:** Detects numerical achievements, percentages, and scale indicators.
+- **Action Plan:** Automatically generates numbered recommendations for candidates.
 
 ---
 
 ## 3. Inputs & Outputs Contract
 
 ### Expected Inputs
-- **Candidate Resume:** Plain text string containing candidate experience, skills, and education.
-- **Job Description:** Plain text string containing the job requirements and responsibilities.
+- **Resume:** Uploaded file (`.pdf`, `.docx`, `.txt`) or pasted plain text.
+- **Job Description:** Selected preset or pasted job posting.
 
 ### Expected Outputs
-- `similarity_score`: Float between `0.0` and `1.0`.
-- `match_percentage`: Float between `0.0%` and `100.0%`.
-- `match_level`: Categorical tier (`High Match` $\ge 70\%$, `Moderate Match` $40\%-69\%$, `Low Match` $<40\%$).
-- `matched_keywords`: List of identified overlapping competencies.
-- `missing_keywords`: List of identified candidate gaps.
-- `verdict`: Human-readable narrative explanation.
+- `match_percentage`: Weighted composite alignment percentage.
+- `skills_overlap_percentage`: Domain technical skills coverage.
+- `textual_similarity_percentage`: TF-IDF vocabulary similarity.
+- `category_breakdown`: Category-by-category skill matrix.
+- `matched_keywords` & `missing_keywords`: Specific competencies found and missing.
+- `ats_audit`: Structural health metrics and section status.
+- `optimization_plan`: Prioritized action items to boost match rate.
 
 ---
 
-## 4. Ethical AI & Practical Limitations
+## 4. Ethical AI & Critical Disclaimer
 
-> ⚠️ **CRITICAL DISCLAIMER: Text-similarity is NOT hiring probability.**
-> A high similarity score demonstrates keyword and contextual correspondence. It does **not** signify a guarantee of an interview, admission, or job offer. Real-world hiring requires holistic human review evaluating soft skills, creative problem solving, cultural contribution, and practical code execution.
-
-### Known Limitations of Current Baseline:
-- **Synonym Invariance:** TF-IDF treats distinct lexical tokens separately (e.g., `GCP` vs `Google Cloud Platform` unless n-grams capture it).
-- **Context Blindness:** Negations (e.g., *"not experienced in Java"*) may still register as term frequency.
-- **Formatting Dependence:** Requires clean plain text; PDF parsing will be handled by upstream document loaders.
+> ⚠️ **NOTICE: Text-similarity is NOT a hiring guarantee or employment probability.**
+> Machine learning similarity scores evaluate textual and competency overlap with a specific job posting. Real-world talent evaluation necessitates holistic human assessment of problem solving, cultural contribution, interpersonal communication, and live code reviews.
 
 ---
 
-## 5. File Structure
+## 5. File Layout
 
 ```
 modules/resume_job_matching/
-├── __init__.py           # Package exports
-├── config.py             # Parameters, sample profiles, and thresholds
-├── preprocessing.py      # Cleaning and skill gap extraction
-├── model.py              # ResumeJobMatcher class and inference pipeline
-├── train.py              # Offline vectorizer training & serialization script
-├── interface.py          # Streamlit UI render() implementation
-├── README.md             # Module documentation
+├── __init__.py           # Exports public API and render()
+├── config.py             # Hyperparameters, skills taxonomy, and presets
+├── preprocessing.py      # PDF/DOCX parsing, taxonomy extraction, ATS audit
+├── model.py              # Hybrid ResumeJobMatcher implementation
+├── train.py              # Vectorizer training & artifact serialization
+├── interface.py          # Interactive Streamlit UI with file upload & tabs
+├── README.md             # This technical document
 ├── data/
-│   └── .gitkeep          # Training datasets directory
+│   └── .gitkeep          # Training data folder
 ├── artifacts/
-│   └── .gitkeep          # Serialized vectorizer (.joblib)
+│   ├── .gitkeep          # Checkpoints folder
+│   └── tfidf_vectorizer.joblib  # Serialized vectorizer
 └── tests/
-    └── test_resume_job_matching.py  # Pytest suite
+    └── test_resume_job_matching.py  # Comprehensive unit test suite (12 tests)
 ```
 
 ---
 
-## 6. Testing & Execution
+## 6. Testing & Running
 
 ### Run Unit Tests
-From the project root:
 ```bash
-pytest modules/resume_job_matching/tests/ -v
+python -m pytest modules/resume_job_matching/tests/ -v
 ```
 
-### Run Model Training & Serialization
+### Run Platform Integration Check
 ```bash
-python modules/resume_job_matching/train.py
+python -m pytest -v
 ```
 
-### Launch Interactive Interface
+### Launch the Application
 ```bash
 streamlit run app.py
 ```
-Navigate to **1. Resume–Job Matching** in the left sidebar.
+*(Select **Resume–Job Matching** from the sidebar)*.

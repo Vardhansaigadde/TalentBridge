@@ -1,10 +1,10 @@
 """
-Resume–Job Matching Machine Learning Model.
-Implements TF-IDF feature extraction, Cosine Similarity matching, and gap analytics.
+Resume–Job Matching Hybrid Machine Learning Model.
+Combines TF-IDF vectorization with Domain Skills Taxonomy and ATS Diagnostics.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import joblib
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -17,14 +17,22 @@ from .config import (
     TFIDF_NGRAM_RANGE,
     THRESHOLD_HIGH,
     THRESHOLD_MODERATE,
+    WEIGHT_SKILLS_OVERLAP,
+    WEIGHT_TEXTUAL_SIMILARITY,
 )
-from .preprocessing import clean_text, find_skill_gap
+from .preprocessing import (
+    audit_resume_structure,
+    clean_text,
+    find_skill_gap_detailed,
+)
 
 
 class ResumeJobMatcher:
     """
-    Computes semantic text similarity and keyword alignment
-    between candidate resumes and job descriptions using TF-IDF and Cosine Similarity.
+    Hybrid Resume–Job Matching engine:
+    1. Lexical & Contextual similarity via TF-IDF + Cosine Distance
+    2. Explicit Domain Competencies & Skills Taxonomy matching
+    3. ATS formatting, impact verbs, and structural audit
     """
 
     def __init__(self, vectorizer: Optional[TfidfVectorizer] = None) -> None:
@@ -37,26 +45,26 @@ class ResumeJobMatcher:
         self.is_fitted = False
 
     def fit(self, corpus: list[str]) -> "ResumeJobMatcher":
-        """Fits the internal TF-IDF vectorizer on a text corpus."""
-        cleaned_corpus = [clean_text(doc) for doc in corpus if doc]
-        if cleaned_corpus:
-            self.vectorizer.fit(cleaned_corpus)
+        """Fits the TF-IDF vectorizer on a corpus."""
+        cleaned = [clean_text(doc) for doc in corpus if doc]
+        if cleaned:
+            self.vectorizer.fit(cleaned)
             self.is_fitted = True
         return self
 
     def save(self, filepath: Optional[Path] = None) -> Path:
-        """Serializes the fitted vectorizer to disk."""
-        target_path = Path(filepath or MODEL_PATH)
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.vectorizer, target_path)
-        return target_path
+        """Serializes the fitted vectorizer."""
+        target = Path(filepath or MODEL_PATH)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.vectorizer, target)
+        return target
 
     @classmethod
     def load(cls, filepath: Optional[Path] = None) -> "ResumeJobMatcher":
-        """Loads a pre-fitted vectorizer from disk if available."""
-        target_path = Path(filepath or MODEL_PATH)
-        if target_path.exists():
-            vec = joblib.load(target_path)
+        """Loads a pre-fitted vectorizer from disk if present."""
+        target = Path(filepath or MODEL_PATH)
+        if target.exists():
+            vec = joblib.load(target)
             instance = cls(vectorizer=vec)
             instance.is_fitted = True
             return instance
@@ -64,8 +72,7 @@ class ResumeJobMatcher:
 
     def compute_similarity(self, resume_text: str, job_text: str) -> float:
         """
-        Computes the cosine similarity score between resume and job description.
-        Returns a float between 0.0 and 1.0.
+        Computes cosine similarity of TF-IDF vectors.
         """
         cleaned_resume = clean_text(resume_text)
         cleaned_job = clean_text(job_text)
@@ -73,59 +80,101 @@ class ResumeJobMatcher:
         if not cleaned_resume or not cleaned_job:
             return 0.0
 
-        # If vectorizer is not pre-fitted on a global corpus, fit on the document pair
         if not self.is_fitted:
             local_vec = TfidfVectorizer(
                 ngram_range=TFIDF_NGRAM_RANGE,
                 sublinear_tf=SUBLINEAR_TF,
                 stop_words="english",
             )
-            tfidf_matrix = local_vec.fit_transform([cleaned_resume, cleaned_job])
-            sim = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+            matrix = local_vec.fit_transform([cleaned_resume, cleaned_job])
+            sim = cosine_similarity(matrix[0:1], matrix[1:2])[0][0]
         else:
             vectors = self.vectorizer.transform([cleaned_resume, cleaned_job])
             sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
 
-        # Bound score between 0.0 and 1.0
         return float(np.clip(sim, 0.0, 1.0))
 
     def predict(self, resume_text: str, job_text: str) -> Dict[str, Any]:
         """
-        Performs full end-to-end matching analysis:
-        - Cosine similarity calculation
-        - Threshold classification (High, Moderate, Low)
-        - Keyword overlap and skill gap analysis
+        Executes complete hybrid analysis:
+        - TF-IDF textual similarity
+        - Domain skills taxonomy overlap
+        - Weighted composite score
+        - ATS structural audit
+        - Actionable step-by-step optimization recommendations
         """
-        score = self.compute_similarity(resume_text, job_text)
-        percentage = round(score * 100.0, 2)
+        # 1. Textual Similarity
+        text_sim = self.compute_similarity(resume_text, job_text)
+        text_pct = round(text_sim * 100.0, 1)
 
-        if percentage >= THRESHOLD_HIGH:
+        # 2. Detailed Skills Taxonomy Analysis
+        skill_analysis = find_skill_gap_detailed(resume_text, job_text)
+        skills_ratio = skill_analysis["skills_match_ratio"]
+        skills_pct = skill_analysis["skills_match_percentage"]
+
+        # 3. Composite Weighted Score
+        if skill_analysis["job_skills"]:
+            composite_score = (WEIGHT_SKILLS_OVERLAP * skills_ratio) + (WEIGHT_TEXTUAL_SIMILARITY * text_sim)
+        else:
+            # Fallback to pure TF-IDF if job description had no detected taxonomy skills
+            composite_score = text_sim
+
+        composite_pct = round(composite_score * 100.0, 1)
+
+        # 4. Classification Tier
+        if composite_pct >= THRESHOLD_HIGH:
             level = "High Match"
             level_color = "#22c55e"
-            verdict = "Strong textual alignment with the key responsibilities and technologies in the job posting."
-        elif percentage >= THRESHOLD_MODERATE:
+            verdict = "Strong candidate alignment! High technical skill coverage and comprehensive experience correspondence."
+        elif composite_pct >= THRESHOLD_MODERATE:
             level = "Moderate Match"
             level_color = "#f59e0b"
-            verdict = "Moderate overlap. Candidate has foundational skills but could address notable skill gaps."
+            verdict = "Solid foundation with moderate overlap. Addressing the identified skill gaps will notably improve suitability."
         else:
             level = "Low Match"
             level_color = "#ef4444"
-            verdict = "Low textual overlap. Significant vocabulary and technology discrepancies detected."
+            verdict = "Limited overlap detected. Crucial job requirements and core technologies are missing from the resume."
 
-        gap_analysis = find_skill_gap(resume_text, job_text)
+        # 5. ATS Structural Audit
+        ats_audit = audit_resume_structure(resume_text)
 
-        resume_word_count = len(clean_text(resume_text).split())
-        job_word_count = len(clean_text(job_text).split())
+        # 6. Actionable Optimization Strategy
+        optimization_plan: List[str] = []
+        if skill_analysis["missing_skills"]:
+            top_missing = ", ".join(f"'{s}'" for s in skill_analysis["missing_skills"][:5])
+            optimization_plan.append(
+                f"**Skill Gap Priority:** Add evidence of experience with high-demand job skills: {top_missing}."
+            )
+        if ats_audit["sections_missing"]:
+            missing_sec = ", ".join(ats_audit["sections_missing"])
+            optimization_plan.append(f"**ATS Section Warning:** Add missing standard sections: {missing_sec}.")
+        if ats_audit["action_verb_count"] < 6:
+            optimization_plan.append(
+                "**Action Verb Impact:** Strengthen bullet points with action verbs (e.g., 'Architected', 'Engineered', 'Optimized')."
+            )
+        if ats_audit["quantification_count"] < 3:
+            optimization_plan.append(
+                "**Quantify Results:** Add numerical metrics, scale indicators (e.g. 'reduced latency by 40%', 'processed 5M requests')."
+            )
+        if not optimization_plan:
+            optimization_plan.append("Your resume is well-tailored for this role with strong skill coverage and high ATS readiness.")
 
+        # Provide both backward-compatible keys and rich new keys
         return {
-            "similarity_score": score,
-            "match_percentage": percentage,
+            "similarity_score": composite_score,
+            "match_percentage": composite_pct,
             "match_level": level,
             "match_color": level_color,
             "verdict": verdict,
-            "matched_keywords": gap_analysis["matched_keywords"],
-            "missing_keywords": gap_analysis["missing_keywords"],
-            "top_job_keywords": gap_analysis["job_keywords"],
-            "resume_word_count": resume_word_count,
-            "job_word_count": job_word_count,
+            "textual_similarity_percentage": text_pct,
+            "skills_overlap_percentage": skills_pct,
+            "matched_keywords": skill_analysis["matched_skills"],
+            "missing_keywords": skill_analysis["missing_skills"],
+            "bonus_skills": skill_analysis["bonus_skills"],
+            "top_job_keywords": skill_analysis["job_skills"],
+            "category_breakdown": skill_analysis["category_breakdown"],
+            "ats_audit": ats_audit,
+            "optimization_plan": optimization_plan,
+            "resume_word_count": ats_audit["word_count"],
+            "job_word_count": len(clean_text(job_text).split()),
         }
