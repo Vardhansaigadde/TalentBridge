@@ -1,0 +1,32 @@
+# ==============================================================================
+# GitHub Code Owners Configuration for TalentBridge AI
+# Ensures PR reviews are automatically assigned to the responsible leads
+# and protects core architecture from unauthorized edits.
+# ==============================================================================
+
+# Default rule: Member 1 (Lead / Project Architect) owns platform core
+*                   @WHENKEY2007
+
+# Platform core files require Lead Architect approval
+/app.py             @WHENKEY2007
+/shared/            @WHENKEY2007
+/tests/             @WHENKEY2007
+/requirements.txt   @WHENKEY2007
+/.github/           @WHENKEY2007
+
+# ==============================================================================
+# Module Owners (Each member owns their assigned folder)
+# Replace placeholder usernames with actual GitHub handles
+# ==============================================================================
+/modules/resume_job_matching/        @WHENKEY2007
+/modules/fake_job_detection/         @member2-username
+/modules/student_performance/        @member3-username
+/modules/entrance_exam_prediction/   @member4-username
+/modules/placement_risk/             @member5-username
+/modules/interview_analyzer/         @member6-username
+/modules/learning_difficulty/        @member7-username
+/modules/fairness_recruitment/       @member8-username
+/modules/employee_attrition/         @member9-username
+/modules/resume_analyzer/            @member10-username
+/modules/internship_fraud_detection/ @member11-username
+/modules/personalized_learning/      @member12-username
